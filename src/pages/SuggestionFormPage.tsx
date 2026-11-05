@@ -1,4 +1,4 @@
-import { assessDraft, fingerprint, Assessment } from '../services/assessment';
+import { assessSuggestion, fingerprint, SuggestionAssessment } from '../services/assessment';
 import { LocationSearch } from '../components/LocationSearch';
 import React, { useState, useEffect } from 'react';
 import {
@@ -53,7 +53,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
 
   // Validation & status
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [assessment,setAssessment] = useState<Assessment|null>(null);
+  const [assessment,setAssessment] = useState<SuggestionAssessment|null>(null);
   const [mergedSuggestion,setMergedSuggestion] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedReport, setSubmittedReport] = useState<CivicReport | null>(null);
@@ -159,7 +159,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
         contactEmail: contactPreference === 'anonymous' ? undefined : contactEmail,
       };
 
-      if (!assessment || assessment.fingerprint !== fingerprint('suggestion',payload)) { setAssessment(await assessDraft('suggestion',payload)); return; }
+      if (!assessment || assessment.fingerprint !== fingerprint('suggestion',payload)) { setAssessment(await assessSuggestion(payload)); return; }
       payload.assessmentId = assessment.assessmentId;
       const merged = await CivicService.mergeSimilarSuggestion(payload);
       if (merged) {
@@ -477,7 +477,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
         </div>
 
         {/* Submit */}
-        {assessment && <div role="status" className="desk-record"><span className={"ai-priority ai-"+assessment.priority}>AI priority: {assessment.priority}</span><p className="mt-3">{assessment.reason}</p><p className="text-xs mt-2">Review the assessment, then confirm submission.</p></div>}
+        {assessment && <div role="status" className="desk-record"><span className="ai-priority ai-low">AI relevance: civic suggestion</span><p className="mt-3">{assessment.reason}</p><p className="text-xs mt-2">Review the relevance check, then confirm submission.</p></div>}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t-2 border-[#181615] dark:border-[#737B85]">
           <div className="text-xs font-mono text-[#665F57] dark:text-[#BBB3A7]">
             [ DEMO NOTICE: PROPOSAL COMMITTED TO LOCAL NOTICEBOARD REPOSITORY ]
@@ -488,7 +488,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
             disabled={isSubmitting}
             className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold text-xs uppercase tracking-wider border-2 border-[#181615] dark:border-[#737B85] shadow-[4px_4px_0px_#181615] hover:shadow-[2px_2px_0px_#181615] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50"
           >
-            {isSubmitting ? (assessment ? 'Submitting…' : 'Assessing priority…') : assessment ? 'Confirm & submit suggestion' : 'Assess priority'}
+            {isSubmitting ? (assessment ? 'Submitting…' : 'Checking suggestion…') : assessment ? 'Confirm & submit suggestion' : 'Check suggestion relevance'}
           </button>
         </div>
       </form>

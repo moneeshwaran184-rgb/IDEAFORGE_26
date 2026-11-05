@@ -119,13 +119,14 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1">
         <div className="flex flex-wrap justify-end items-center gap-3 px-6 py-3 border-b"><button type="button" aria-pressed={darkMode} onClick={() => setDarkMode(value => !value)} className="px-4 py-2 border rounded-lg font-bold">{darkMode ? 'Light mode' : 'Dark mode'}</button>
+          {authReady && <DemoAccountSwitcher activeEmail={citizen?.email||''}/>}
           {!authReady ? <span>Checking login…</span> : citizen ? <>
         {citizen && roleReady && !department && <NotificationBell key={citizen.id} userId={citizen.id} onOpen={async(id)=>{
           const {data,error}=await supabase.from('reports').select('reference_number').eq('id',id).single();
           if(error){window.alert('Unable to open report. Please try again.');throw error;}
           await refreshReports();handleSearchTrack(data.reference_number);
         }}/>}
-            <DemoAccountSwitcher activeEmail={citizen.email||''}/><span className="text-sm truncate">{citizen.email}</span>
+            <span className="text-sm truncate">{citizen.email}</span>
             <button className="font-bold underline" onClick={async () => { const { error } = await supabase.auth.signOut(); if (error) window.alert(error.message); }}>Log out</button>
           </> : <button className="px-5 py-2 bg-[#181615] text-white rounded-lg" onClick={() => setCurrentView('login')}>Log in / Sign up</button>}
         </div>

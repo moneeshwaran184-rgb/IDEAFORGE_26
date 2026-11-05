@@ -1,5 +1,6 @@
 import {supabase} from './auth';
 export interface Assessment {assessmentId:string;priority:string;reason:string;fingerprint:string}
+export interface SuggestionAssessment {assessmentId:string;relevant:true;reason:string;fingerprint:string}
 type AssessmentDraft={category:string;title:string;description:string;area?:string;address?:string;lat?:number;lng?:number};
 export const fingerprint=(type:string,p:AssessmentDraft)=>JSON.stringify([type,p.category,p.title.trim(),p.description.trim(),p.area||'',p.address||'',p.lat??null,p.lng??null]);
 async function validateComplaintLocation(p:AssessmentDraft){
@@ -13,4 +14,10 @@ export async function assessDraft(type:string,p:AssessmentDraft):Promise<Assessm
  if(error){let message='AI assessment unavailable. Check the assess-draft deployment and retry.';try{const body=await error.context?.json();if(body?.error)message=body.error;}catch{}throw new Error(message);}
  if(!data?.assessmentId||!['low','medium','high','critical'].includes(data.priority))throw new Error('AI returned an invalid assessment. Please retry.');
  return {...data,fingerprint:fingerprint(type,p)};
+}
+export async function assessSuggestion(p:AssessmentDraft):Promise<SuggestionAssessment>{
+ const {data,error}=await supabase.functions.invoke('assess-draft',{body:{type:'suggestion',category:p.category,title:p.title,description:p.description}});
+ if(error){let message='Could not check whether this is a relevant civic suggestion. Please retry.';try{const body=await error.context?.json();if(body?.error)message=body.error;}catch{}throw new Error(message);}
+ if(data?.relevant!==true||!data.assessmentId)throw new Error(data?.error||'This suggestion is not relevant to a civic issue.');
+ return {...data,fingerprint:fingerprint('suggestion',p)};
 }

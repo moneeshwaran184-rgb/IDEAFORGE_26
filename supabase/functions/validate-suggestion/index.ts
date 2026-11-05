@@ -122,7 +122,10 @@ Deno.serve(async (req: Request) => {
     const result = JSON.parse(text);
     if (typeof result.relevant !== 'boolean' || typeof result.relevanceReason !== 'string' ||
         typeof result.duplicateReportId !== 'string') throw new Error('Invalid AI response');
-    if (!result.relevant) return reply({ error: (result.relevanceReason || 'This does not look like a civic suggestion.') + ' Please submit an idea that can improve a public service or neighborhood.' }, 422);
+    if (!result.relevant) {
+      await db.from('priority_assessments').delete().eq('id', input.assessmentId).eq('user_id', user.id);
+      return reply({ error: `Suggestion rejected as irrelevant: ${result.relevanceReason || 'This does not look like a civic suggestion.'} Please submit an actionable idea that benefits a public service or neighborhood.` }, 422);
+    }
 
     const candidate = candidates.find(({ row }) => row.id === result.duplicateReportId);
     if (candidate && result.duplicateReportId) {
