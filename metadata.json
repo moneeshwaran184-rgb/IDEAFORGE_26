@@ -1,0 +1,6 @@
+{
+  "name": "Fix My City",
+  "description": "A polished civic platform for residents to report local problems, share community suggestions, and track municipal progress.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
