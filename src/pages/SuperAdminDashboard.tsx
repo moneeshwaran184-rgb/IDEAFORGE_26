@@ -1,0 +1,14 @@
+import React,{useEffect,useState} from 'react';
+import {supabase} from '../services/auth';
+type Report={id:string;title:string;type:string;status:string;created_at:string;assigned_department:string|null;reference_number:string};
+export function SuperAdminDashboard({tab}:{tab:string}){
+ const [rows,setRows]=useState<Report[]>([]),[inbox,setInbox]=useState<{id:string;sender:string;subject:string;created_at:string;read_at:string|null}[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+ async function load(){setLoading(true);const r=await supabase.from('reports').select('id,title,type,status,created_at,assigned_department,reference_number').order('created_at',{ascending:false});if(r.error)setError('Unable to load reports.');else{setRows(r.data||[]);setError('');}const m=await supabase.from('admin_inbox').select('id,sender,subject,created_at,read_at').order('created_at',{ascending:false});if(!m.error)setInbox(m.data||[]);setLoading(false);}
+ useEffect(()=>{void load();},[]);
+ const pending=rows.filter(r=>r.status==='received'),active=rows.filter(r=>['under_review','assigned','in_progress'].includes(r.status)),done=rows.filter(r=>r.status==='resolved');
+ return <main className="desk-page"><div className="desk-eyebrow">FIX MY CITY / ADMINISTRATION</div><div className="desk-heading"><div><h1>{tab==='inbox'?'Admin inbox':tab==='reports'?'All city reports':'Super Admin'}<span>.</span></h1><p>Citywide service overview and administrative inbox.</p></div><button className="desk-secondary" onClick={()=>void load()}>Refresh</button></div>
+ {error&&<p role="alert">{error}</p>}{loading?<p>Loading…</p>:tab==='inbox'?<><div className="desk-empty"><h2>Email inbox is ready for integration</h2><p>Connect a mail provider to receive and display messages. No mailbox has been created yet.</p><p>Suggested address: <strong>admin@fixmycity.tn</strong></p></div>{inbox.map(m=><article key={m.id} className="desk-record"><strong>{m.subject}</strong><p>{m.sender} · {new Date(m.created_at).toLocaleString()}</p></article>)}</>:<>
+ {tab==='overview'&&<div className="desk-stats">{[['All reports',rows.length],['Not started',pending.length],['In progress',active.length],['Completed',done.length]].map(([l,n])=><div key={l}><span>{l}</span><strong>{n}</strong></div>)}</div>}
+ <div className="desk-section-label">{tab==='overview'?'LATEST REPORTS':'ALL REPORTS'} · {rows.length}</div>{rows.slice(0,tab==='reports'?500:50).map(r=><article className="desk-record" key={r.id}><div className="desk-record-top"><h2>{r.title}</h2><span className={'desk-status '+(r.status==='resolved'?'complete':'')}>{r.status.replaceAll('_',' ')}</span></div><p className="desk-reference">{r.reference_number} · {r.type} · {r.assigned_department||'Unassigned'} · {new Date(r.created_at).toLocaleString()}</p></article>)}
+ </>}</main>;
+}

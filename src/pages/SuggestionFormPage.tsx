@@ -54,6 +54,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
   // Validation & status
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [assessment,setAssessment] = useState<Assessment|null>(null);
+  const [mergedSuggestion,setMergedSuggestion] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedReport, setSubmittedReport] = useState<CivicReport | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
@@ -133,7 +134,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
     return Object.keys(errs).length === 0;
   };
 
-  useEffect(()=>{setAssessment(null);}, [title,description,selectedCategory,communityBenefits]);
+  useEffect(()=>{setAssessment(null);}, [title,description,selectedCategory,communityBenefits,selectedDistrictId,address,lat,lng]);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -160,7 +161,15 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
 
       if (!assessment || assessment.fingerprint !== fingerprint('suggestion',payload)) { setAssessment(await assessDraft('suggestion',payload)); return; }
       payload.assessmentId = assessment.assessmentId;
+      const merged = await CivicService.mergeSimilarSuggestion(payload);
+      if (merged) {
+        setMergedSuggestion(true);
+        setSubmittedReport(merged);
+        onReportCreated(merged);
+        return;
+      }
       const created = await CivicService.createSuggestion(payload);
+      setMergedSuggestion(false);
       setSubmittedReport(created);
       onReportCreated(created);
     } catch (err) {
@@ -188,15 +197,15 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
           </div>
 
           <div className="inline-block px-2.5 py-0.5 bg-[#FAF7F0] dark:bg-[#1E2125] border border-[#181615] dark:border-[#737B85] text-[#181615] dark:text-[#F4EFE6] rounded-md text-[10px] font-mono font-bold uppercase mb-3">
-            [ CIVIC PROPOSAL DOCKET · DEMO RECORD ]
+            {mergedSuggestion ? '[ COMMUNITY IDEA JOINED · SHARED DOCKET ]' : '[ CIVIC PROPOSAL DOCKET · DEMO RECORD ]'}
           </div>
 
           <h2 className="font-editorial text-2xl sm:text-3xl font-extrabold text-[#181615] dark:text-[#F4EFE6]">
-            Civic Idea Published
+            {mergedSuggestion ? 'Your Idea Joined a Similar Proposal' : 'Civic Idea Published'}
           </h2>
 
           <p className="text-xs sm:text-sm text-[#4A453F] dark:text-[#CCC5BA] max-w-md mx-auto mt-2 mb-6">
-            Your proposal has been pinned to the public district board. Neighbors can discover it and vote to add community visibility.
+            {mergedSuggestion ? 'A similar open suggestion already exists. Your support is now linked to that shared department review, and you can follow its progress here.' : 'Your proposal has been pinned to the public district board. Neighbors can discover it and vote to add community visibility.'}
           </p>
 
           <div className="bg-white dark:bg-[#22262B] border-2 border-dashed border-[#181615] dark:border-[#737B85] rounded-2xl p-5 max-w-md mx-auto mb-8 text-left space-y-3">
@@ -243,6 +252,7 @@ export const SuggestionFormPage: React.FC<SuggestionFormPageProps> = ({
               type="button"
               onClick={() => {
                 setSubmittedReport(null);
+                setMergedSuggestion(false);
                 setTitle('');
                 setDescription('');
                 setCommunityBenefits('');

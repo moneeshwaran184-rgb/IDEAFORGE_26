@@ -6,5 +6,3 @@ coverage/
 *.log
 .env*
 !.env.example
-# Publishable (browser-safe) Supabase config, needed by Vercel builds.
-!.env.production

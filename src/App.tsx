@@ -1,3 +1,6 @@
+import { DemoAccountSwitcher } from './components/DemoAccountSwitcher';
+import { SuperAdminNavbar } from './components/SuperAdminNavbar';
+import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
 import { ComplaintHeatMap } from './components/ComplaintHeatMap';
 import { NotificationBell } from './components/NotificationBell';
 import { CategoryPicker } from './components/CategoryPicker';
@@ -28,6 +31,7 @@ export default function App() {
     try { localStorage.setItem('fmc-theme', darkMode ? 'dark' : 'light'); } catch {}
   }, [darkMode]);
   const [categoryPicker,setCategoryPicker] = useState<'complaint'|'suggestion'|null>(null);
+  const [adminTab,setAdminTab] = useState('overview');
   const [departmentTab,setDepartmentTab] = useState('complaint');
   const [currentView, setCurrentView] = useState<string>('home');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
@@ -46,17 +50,18 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const [isSuperAdmin,setIsSuperAdmin] = useState(false);
   const [department,setDepartment] = useState<string|null>(null);
   const [roleReady,setRoleReady] = useState(false);
   const [roleError,setRoleError] = useState('');
   const [roleAttempt,setRoleAttempt] = useState(0);
   useEffect(()=>{
-    let alive=true;setDepartment(null);setRoleReady(false);setRoleError('');
+    let alive=true;setDepartment(null);setIsSuperAdmin(false);setRoleReady(false);setRoleError('');
     if(!citizen){setRoleReady(true);return;}
-    supabase.from('department_members').select('department_id').eq('user_id',citizen.id).maybeSingle().then(({data,error})=>{
+    Promise.all([supabase.from('department_members').select('department_id').eq('user_id',citizen.id).maybeSingle(),supabase.from('super_admins').select('user_id').eq('user_id',citizen.id).maybeSingle()]).then(([deptResult,adminResult])=>{
       if(!alive)return;
-      if(error){setRoleError('Account permissions could not load. Run the department database setup, then retry.');return;}
-      setDepartment(data?.department_id||null);setRoleReady(true);
+      if(deptResult.error||adminResult.error){setRoleError('Account permissions could not load. Run the admin database setup, then retry.');return;}
+      setDepartment(deptResult.data?.department_id||null);setIsSuperAdmin(!!adminResult.data);setRoleReady(true);
     });
     return()=>{alive=false;};
   },[citizen?.id,roleAttempt]);
@@ -104,12 +109,12 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#FBF9F4] dark:bg-[#151719] text-[#181615] dark:text-[#F4EFE6] font-sans selection:bg-[#EB4A26] selection:text-white">
       {categoryPicker && <CategoryPicker type={categoryPicker} onClose={()=>setCategoryPicker(null)} onSelect={id=>{handleNavigate(categoryPicker,id);setCategoryPicker(null);}}/>}
       {/* Top Navbar */}
-      {(!citizen || (roleReady && !department)) ? (      <Navbar
+      {(!citizen || (roleReady && !department && !isSuperAdmin)) ? (      <Navbar
         currentView={currentView}
         onNavigate={handleNavigate}
         userProfile={{ name: citizen?.user_metadata?.display_name || citizen?.email || 'Guest', isDemoUser: !citizen }}
         onToggleProfileModal={() => citizen ? setIsProfileModalOpen(true) : setCurrentView('login')}
-      />) : <DepartmentNavbar tab={departmentTab} onTab={setDepartmentTab} onAccount={()=>setIsProfileModalOpen(true)}/>}
+      />) : citizen && roleReady && isSuperAdmin ? <SuperAdminNavbar tab={adminTab} onTab={setAdminTab}/> : <DepartmentNavbar tab={departmentTab} onTab={setDepartmentTab} onAccount={()=>setIsProfileModalOpen(true)}/>}
 
       {/* Main Content Area */}
       <main className="flex-1">
@@ -120,7 +125,7 @@ export default function App() {
           if(error){window.alert('Unable to open report. Please try again.');throw error;}
           await refreshReports();handleSearchTrack(data.reference_number);
         }}/>}
-            <span className="text-sm truncate">{citizen.email}</span>
+            <DemoAccountSwitcher activeEmail={citizen.email||''}/><span className="text-sm truncate">{citizen.email}</span>
             <button className="font-bold underline" onClick={async () => { const { error } = await supabase.auth.signOut(); if (error) window.alert(error.message); }}>Log out</button>
           </> : <button className="px-5 py-2 bg-[#181615] text-white rounded-lg" onClick={() => setCurrentView('login')}>Log in / Sign up</button>}
         </div>
@@ -161,7 +166,8 @@ export default function App() {
           />
         )}
         {citizen && !roleReady && <div className="p-6">{roleError ? <><p role="alert">{roleError}</p><button className="underline" onClick={()=>setRoleAttempt(n=>n+1)}>Retry</button></> : 'Loading account permissions…'}</div>}
-        {citizen && roleReady && department && <DepartmentDashboard key={citizen.id+department} department={department} tab={departmentTab}/>}
+        {citizen && roleReady && isSuperAdmin && <SuperAdminDashboard tab={adminTab}/>}
+        {citizen && roleReady && !isSuperAdmin && department && <DepartmentDashboard key={citizen.id+department} department={department} tab={departmentTab}/>}
 
         {citizen && roleReady && !department && currentView === 'my-reports' && <MyReportsPage key={citizen.id} userId={citizen.id} onTrack={async(ref)=>{await refreshReports();handleSearchTrack(ref);}}/>}
         {!department && roleReady && currentView === 'heat-map' && <ComplaintHeatMap reports={reports} fullScreen onNavigate={()=>handleNavigate('home')} />}
@@ -181,6 +187,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 

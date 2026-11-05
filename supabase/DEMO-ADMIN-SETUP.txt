@@ -1,0 +1,19 @@
+DEMO AND ADMIN SETUP
+
+Demo account switcher:
+- Add authorized Supabase Auth email addresses in the account switcher.
+- It stores email addresses only in this browser.
+- Select an account and enter its password; authentication is verified by Supabase.
+- Create demo accounts in Supabase Authentication and use role assignments below.
+- Never use shared/public passwords in a deployed demo.
+
+Super Admin:
+1. Run supabase/super-admin.sql in the Supabase SQL Editor.
+2. Create admin@fixmycity.tn in Supabase Authentication > Users.
+3. Assign it by running:
+   insert into public.super_admins(user_id)
+   select id from auth.users where lower(email)=lower('admin@fixmycity.tn')
+   on conflict do nothing;
+4. Sign in again. The account will see City dashboard, All reports, and Email inbox.
+
+admin@fixmycity.tn is a suggested mailbox address only. Create it with your domain/email provider before expecting mail delivery. The dashboard inbox is a database-backed placeholder; incoming email sync is not configured.

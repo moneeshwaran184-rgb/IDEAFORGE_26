@@ -534,6 +534,34 @@ export const CivicService = { async refresh() { const rows = await cloudReports(
     return saved;
   },
 
+  async mergeSimilarSuggestion(input: SuggestionCreateInput): Promise<CivicReport | null> {
+    const { data, error } = await supabase.functions.invoke('validate-suggestion', {
+      body: {
+        assessmentId: input.assessmentId,
+        category: input.category,
+        title: input.title,
+        description: input.description,
+        area: input.area,
+        address: input.address,
+        lat: input.lat,
+        lng: input.lng,
+      },
+    });
+    if (error) {
+      let message = 'Suggestion review is unavailable. Retry; it has not been submitted.';
+      try { const body = await error.context?.json(); if (body?.error) message = body.error; } catch { /* use fallback */ }
+      throw new Error(message);
+    }
+    if (data?.valid !== true) throw new Error(data?.error || 'This suggestion could not be verified.');
+    if (!data.merged) return null;
+    if (typeof data.reportId !== 'string') throw new Error('The similar suggestion was merged, but its report could not be loaded. Refresh My reports.');
+    const merged = (await cloudReports('?id=eq.' + encodeURIComponent(data.reportId) + '&select=*'))[0];
+    if (!merged) throw new Error('The similar suggestion was merged. Refresh My reports to view its tracking record.');
+    const all = loadStoredReports();
+    saveReports([merged, ...all.filter((report) => report.id !== merged.id)]);
+    return merged;
+  },
+
   async toggleVote(reportId: string): Promise<CivicReport | null> {
     const all = loadStoredReports();
     const userVotes = loadUserVotes();

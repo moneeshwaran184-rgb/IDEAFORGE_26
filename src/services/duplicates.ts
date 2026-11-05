@@ -18,6 +18,7 @@ export interface DuplicateCheck {
   checkedAt: string;
   candidates: DuplicateCandidate[];
 }
+export interface OwnDuplicate {reportId:string;referenceNumber:string;title:string;address:string;area:string;status:string;createdAt:string;distanceMeters:number;reason:string}
 
 export interface DuplicateDraft {
   category: string;
@@ -55,6 +56,13 @@ export async function findDuplicateReports(draft: DuplicateDraft, finalReview = 
     throw new Error('The duplicate check returned an invalid response. Retry or submit separately.');
   }
   return { checkedAt: data.checkedAt, candidates: data.candidates };
+}
+
+export async function findMyDuplicateComplaint(draft:DuplicateDraft,assessmentId:string):Promise<OwnDuplicate|null>{
+ const {data,error}=await supabase.functions.invoke('check-my-duplicate-complaint',{body:{...draft,assessmentId}});
+ if(error){let message='Could not check your earlier complaints. Please retry.';try{const body=await error.context?.json();if(body?.error)message=body.error;}catch{}throw new Error(message);}
+ if(!data||typeof data.duplicate!=='boolean')throw new Error('Your duplicate check returned an invalid response. Please retry.');
+ return data.duplicate?data.report as OwnDuplicate:null;
 }
 
 export async function attachToExistingReport(reportId: string, draft: DuplicateDraft, assessmentId: string): Promise<void> {

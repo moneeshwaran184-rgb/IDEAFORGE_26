@@ -1,5 +1,5 @@
 import { assessDraft, fingerprint, Assessment } from '../services/assessment';
-import { attachToExistingReport, duplicateFingerprint, DuplicateCandidate, DuplicateDraft, findDuplicateReports } from '../services/duplicates';
+import { attachToExistingReport, duplicateFingerprint, DuplicateCandidate, DuplicateDraft, findDuplicateReports, findMyDuplicateComplaint, OwnDuplicate } from '../services/duplicates';
 import { LocationSearch } from '../components/LocationSearch';
 import React, { useState, useEffect } from 'react';
 import {
@@ -64,6 +64,8 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
   const [assessment,setAssessment] = useState<Assessment|null>(null);
   const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[] | null>(null);
   const [duplicateCheckedKey, setDuplicateCheckedKey] = useState('');
+  const [myDuplicate, setMyDuplicate] = useState<OwnDuplicate|null>(null);
+  const [myDuplicateCheckedKey, setMyDuplicateCheckedKey] = useState('');
   const [duplicateCheckError, setDuplicateCheckError] = useState('');
   const [attachedReport, setAttachedReport] = useState<DuplicateCandidate | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -179,7 +181,7 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
     return Object.keys(errs).length === 0;
   };
 
-  useEffect(()=>{setAssessment(null);setDuplicateCandidates(null);setDuplicateCheckedKey('');setDuplicateCheckError('');}, [title,description,selectedCategory,address,lat,lng]);
+  useEffect(()=>{setAssessment(null);setDuplicateCandidates(null);setDuplicateCheckedKey('');setDuplicateCheckError('');setMyDuplicate(null);setMyDuplicateCheckedKey('');}, [title,description,selectedCategory,address,lat,lng]);
   const makeDuplicateDraft = (): DuplicateDraft => ({ category: selectedCategory, title, description, lat, lng });
 
   const submitSeparateIssue = async (payload: ComplaintCreateInput, recheck = false) => {
@@ -236,6 +238,14 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
 
       const duplicateDraft = makeDuplicateDraft();
       const duplicateKey = duplicateFingerprint(duplicateDraft);
+      if (myDuplicateCheckedKey !== duplicateKey) {
+        const previous = await findMyDuplicateComplaint(duplicateDraft, assessment.assessmentId);
+        setMyDuplicate(previous);
+        setMyDuplicateCheckedKey(duplicateKey);
+        if (previous) return;
+      } else if (myDuplicate) {
+        return;
+      }
       if (duplicateCheckedKey !== duplicateKey) {
         setDuplicateCheckError('');
         try {
@@ -367,6 +377,10 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
         </div>
       </div>
     );
+  }
+
+  if (myDuplicate && myDuplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft())) {
+    return <div className="max-w-2xl mx-auto px-4 py-12"><section className="desk-record space-y-4" role="status"><span className="desk-eyebrow">POSSIBLE REPEAT · CHECKED AGAINST YOUR REPORTS</span><h1 className="font-editorial text-2xl font-bold">You may have already reported this problem</h1><p>{myDuplicate.reason}</p><div className="rounded-xl border p-4"><p className="font-mono text-xs font-bold">{myDuplicate.referenceNumber} · {myDuplicate.status.replaceAll('_',' ')}</p><h2 className="font-bold mt-2">{myDuplicate.title}</h2><p className="text-sm mt-2">{myDuplicate.address}, {myDuplicate.area} · {myDuplicate.distanceMeters} m away</p></div><p className="text-sm">We did not submit another complaint. You can track your existing report below.</p><button type="button" onClick={()=>onNavigateToTrack(myDuplicate.referenceNumber)} className="desk-primary">Track existing report</button></section></div>;
   }
 
   return (
@@ -686,6 +700,7 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
         {/* Submit Button */}
         {assessment && <div role="status" className="desk-record"><span className={"ai-priority ai-"+assessment.priority}>AI priority: {assessment.priority}</span><p className="mt-3">{assessment.reason}</p><p className="text-xs mt-2">Review this assessment, then confirm your submission. The department makes the final decision.</p></div>}
         {duplicateCheckError && <div role="alert" className="desk-record border-amber-600"><h2 className="font-bold">Could not check for duplicate reports</h2><p className="mt-2 text-sm">{duplicateCheckError}</p><div className="flex flex-wrap gap-3 mt-3"><button type="button" className="desk-secondary" disabled={isSubmitting} onClick={()=>{setDuplicateCheckError('');setDuplicateCheckedKey('');}}>Retry duplicate check</button><button type="button" className="desk-primary" disabled={isSubmitting||!assessment} onClick={()=>void submitSeparateIssue(makePayload(), true)}>Submit as a separate issue</button></div></div>}
+        {myDuplicate && myDuplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()) && <section className="desk-record border-orange-500 space-y-3" role="status"><h2 className="font-bold">You may have already submitted this problem</h2><p>{myDuplicate.referenceNumber}: {myDuplicate.title} · {myDuplicate.distanceMeters} m away</p><button type="button" className="desk-secondary" onClick={()=>onNavigateToTrack(myDuplicate.referenceNumber)}>Track existing report</button></section>}
         {duplicateCandidates && duplicateCandidates.length > 0 && duplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()) && <section aria-labelledby="duplicate-match-heading" className="desk-record border-orange-500 space-y-4">
           <div><span className="desk-eyebrow">POSSIBLE MATCHES FOUND</span><h2 id="duplicate-match-heading" className="font-editorial text-xl font-bold mt-1">Is this the same street problem?</h2><p className="text-sm mt-1">AI suggestions can be wrong. Review each case and choose whether to join it or create a separate work item.</p></div>
           {duplicateCandidates.map(candidate=><article key={candidate.reportId} className="rounded-2xl border-2 p-4 bg-white dark:bg-[#22262B] space-y-2">
@@ -702,10 +717,10 @@ export const ComplaintFormPage: React.FC<ComplaintFormPageProps> = ({
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!(myDuplicate && myDuplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()))}
             className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-[#EB4A26] hover:bg-[#D73A17] text-white font-bold text-xs uppercase tracking-wider border-2 border-[#181615] dark:border-[#737B85] shadow-[4px_4px_0px_#181615] hover:shadow-[2px_2px_0px_#181615] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50"
           >
-            {isSubmitting ? (assessment ? 'Checking and submitting…' : 'Assessing priority…') : !assessment ? 'Assess priority' : duplicateCandidates?.length ? 'Choose an option above' : duplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()) ? 'Confirm & submit report' : 'Check for duplicate reports'}
+            {isSubmitting ? (assessment ? 'Checking and submitting…' : 'Assessing priority…') : myDuplicate && myDuplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()) ? 'Already reported' : !assessment ? 'Assess priority' : duplicateCandidates?.length ? 'Choose an option above' : duplicateCheckedKey === duplicateFingerprint(makeDuplicateDraft()) ? 'Confirm & submit report' : 'Check for duplicate reports'}
           </button>
         </div>
         {errors.form && (

@@ -6,14 +6,29 @@ GEMINI PRIORITY SETUP
    Alternatively: supabase functions deploy score-priority --project-ref xlwkpvjxeremgjzsodfj --no-verify-jwt
    This function validates the user's bearer token with auth.getUser itself.
    If deploying in the dashboard, disable the legacy JWT verification option.
-4. Submit a new complaint. It is saved first, then the authenticated frontend requests assessment.
+4. Submit a new complaint. The authenticated frontend checks its location first, then requests priority assessment; the report is created only after confirmation.
 5. Department admins see AI priority and reason. Assess priority also works on older reports.
    Failed assessments can be retried after two minutes, up to three attempts per report.
 Model: gemini-3.5-flash-lite.
-Only title, description, category and report type are sent to Gemini. Photos are not analyzed.
-AI suggestions do not complete, reject, or hide reports. Departments still review all reports.
+The priority assessor sends title, description, category, and report type to Gemini. Photos are not analyzed.
 If the browser closes before requesting scoring, use Assess priority in the department inbox.
 Do not rerun earlier schema-repair scripts after this migration without reviewing permissions/triggers.
+
+COMPLAINT LOCATION RELEVANCE CHECK
+1. Keep GEMINI_API_KEY in Supabase Edge Function Secrets; the location check uses the same secret.
+2. Deploy supabase/functions/validate-complaint-location/index.ts as `validate-complaint-location` with JWT verification disabled; it validates the signed-in citizen itself:
+   supabase functions deploy validate-complaint-location --project-ref xlwkpvjxeremgjzsodfj --no-verify-jwt
+3. The complaint form calls this before priority assessment. It reverse-geocodes the selected coordinates with OpenStreetMap Nominatim, checks the place and Tamil Nadu boundary, and asks Gemini 3.5 Flash Lite whether the complaint fits the selected place. Clear mismatches, including an ocean pin for a road issue, are blocked with a correction message. Ambiguous matches are allowed with a reminder to verify the pin.
+4. No additional SQL is needed; the function uses the existing `priority_assessments` table for its per-user request limit. If deployment uses the Supabase Dashboard, disable legacy JWT verification for this function too.
+5. Nominatim is a public, rate-limited geocoder. Keep demo traffic modest and follow its usage policy; for production traffic, use a hosted geocoding provider or a self-hosted service.
+
+SUGGESTION RELEVANCE AND MERGING
+1. Run supabase/suggestion-merge.sql after ai-priority.sql and the citizen/department workflow SQL. It creates the citizen links and the protected merge RPC used for shared suggestions.
+2. Deploy supabase/functions/validate-suggestion/index.ts as `validate-suggestion` with JWT verification disabled; the function checks the signed-in citizen itself:
+   supabase functions deploy validate-suggestion --project-ref xlwkpvjxeremgjzsodfj --no-verify-jwt
+3. It uses the existing GEMINI_API_KEY secret. When a citizen confirms a suggestion, Gemini rejects spam or unrelated/non-civic text. It checks open suggestions assigned to the same department; a confident match is attached to the existing item, not inserted as another department work item.
+4. Citizens linked to the shared item see it in My reports and receive its department updates. The department suggestion inbox shows one item and its joined-citizen count. Uncertain similarity is kept as a separate suggestion to avoid incorrect merges.
+5. Existing suggestions are not automatically consolidated by deploying this function; matching runs when a new suggestion is confirmed.
 
 DUPLICATE COMPLAINT SUGGESTIONS
 1. Apply duplicate-report-workflow.sql after department-workflow.sql and repair-citizen-workflow.sql.
@@ -22,3 +37,9 @@ DUPLICATE COMPLAINT SUGGESTIONS
    supabase functions deploy find-duplicate-reports --no-verify-jwt
 4. The check only compares open complaints in the same category/department within 350 metres. Gemini suggests likely matches; citizens choose whether to attach or file a separate issue.
 5. An attached report remains one department work item. Linked citizens can see it in My reports and receive later status notifications.
+
+CHECK A CITIZEN'S REPEATED COMPLAINT
+1. Deploy supabase/functions/check-my-duplicate-complaint/index.ts as `check-my-duplicate-complaint` with JWT verification disabled:
+   supabase functions deploy check-my-duplicate-complaint --project-ref xlwkpvjxeremgjzsodfj --no-verify-jwt
+2. It uses the existing GEMINI_API_KEY and priority_assessments table. Before the complaint is created, it checks only the signed-in citizen's own open complaints in the same category, within 100 metres, then asks Gemini if it is the same asset and ongoing fault.
+3. A confident match blocks a second submission and shows the earlier reference with a Track existing report button. Different nearby problems are allowed; resolved complaints do not block a new report. No additional SQL is needed.
