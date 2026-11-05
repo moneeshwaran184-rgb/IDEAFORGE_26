@@ -9,7 +9,6 @@ export function DemoAccountSwitcher({activeEmail}:{activeEmail:string}){
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(saved))}catch{}},[saved]);
  useEffect(()=>{let alive=true;
   async function sync(){
-   if(!activeEmail)return;
    const {data,error:loadError}=await supabase.from('demo_profile_directory').select('email,label').order('created_at');
    if(!alive)return;
    if(loadError){setError('Showing saved profiles from this browser. Run demo-profile-directory.sql to enable the shared demo list.');return;}
@@ -25,7 +24,7 @@ export function DemoAccountSwitcher({activeEmail}:{activeEmail:string}){
   window.addEventListener('storage',storage);
   return()=>{alive=false;clearInterval(timer);window.removeEventListener('storage',storage);};
  },[activeEmail]);
- const add=async()=>{const clean=email.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)){setError('Enter a valid email address.');return}if(!saved.some(a=>a.email===clean))setSaved(a=>[{email:clean,label:clean.split('@')[0]},...a]);setEmail('');setShowAdd(false);setError('');if(activeEmail){const {error:saveError}=await supabase.from('demo_profile_directory').insert({email:clean,label:clean.split('@')[0]});if(saveError&&saveError.code!=='23505')setError('Saved on this browser. Run demo-profile-directory.sql to share it with everyone.');}};
+ const add=async()=>{const clean=email.trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)){setError('Enter a valid email address.');return}if(!saved.some(a=>a.email===clean))setSaved(a=>[{email:clean,label:clean.split('@')[0]},...a]);setEmail('');setShowAdd(false);setError('');const {error:saveError}=await supabase.from('demo_profile_directory').insert({email:clean,label:clean.split('@')[0]});if(saveError&&saveError.code!=='23505')setError('Saved on this browser, but could not sync to the shared demo list. Apply the demo-profile-directory.sql setup in Supabase.');};
  async function login(target:string){setBusy(true);setError('');try{const {error}=await supabase.auth.signInWithPassword({email:target,password});if(error)throw error;setOpen(false);setPassword('')}catch(e){setError(e instanceof Error?e.message:'Sign in failed.')}finally{setBusy(false)}}
  return <div className="demo-switcher"><button className="demo-switcher-trigger" aria-expanded={open} onClick={()=>setOpen(v=>!v)}><span className="demo-avatar">{activeEmail.slice(0,1).toUpperCase()||'D'}</span><span className="demo-trigger-label">Demo profiles</span><ChevronDown size={15}/></button>
  {open&&<section className="demo-switcher-menu"><div className="demo-switcher-title"><strong>DEMO ACCOUNT SWITCHER</strong><small>Shared demo emails · saved across account switches</small></div>
