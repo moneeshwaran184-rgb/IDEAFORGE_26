@@ -1,0 +1,19 @@
+ACTIVATION
+1. Run department-workflow.sql in Supabase SQL Editor.
+2. Sign up each department account on the website and confirm its email.
+3. Replace the example below with the real registered email and run in SQL Editor:
+
+insert into public.department_members(user_id,department_id)
+select id, 'roads' from auth.users where lower(email)=lower('YOUR-REGISTERED-DEPARTMENT-EMAIL')
+on conflict(user_id) do update set department_id=excluded.department_id;
+
+Verify assignment (must show the intended email):
+select u.email,m.department_id from public.department_members m join auth.users u on u.id=m.user_id;
+
+Department IDs: roads, electricity, sanitation, water, transport, parks, safety, general.
+Sign out and log back in after assignment. Never assign a role from user-editable profile metadata.
+
+Notifications are in-app, refreshed every 15 seconds while signed in; email and browser push delivery are not configured.
+Existing reports without citizen_id cannot notify their original owner. Do not guess ownership.
+Category routing currently covers Tamil Nadu as a whole, not individual municipal jurisdictions.
+The publishable key cannot run migrations or assign roles; project owner access is required.
